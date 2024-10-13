@@ -13,5 +13,6 @@ void isr14(struct interrupt_frame *frame); // Page Fault
 void isr32(struct interrupt_frame *frame); // Timer
 void enable_interrupts();
 void handle_interrupt(int interrupt_number);
+void reset_interrupt_flags();
 
 #endif

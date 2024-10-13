@@ -4,11 +4,18 @@
 
 extern void enable_interrupts_asm();
 
+#define MAX_INTERRUPTS 256
+
+static uint8_t interrupt_handled[MAX_INTERRUPTS] = {0};
+
 void handle_interrupt(int interrupt_number) {
-    print_set_color(PRINT_COLOR_BLUE, PRINT_COLOR_BLACK);
-    print_str("Interrupt ");
-    print_int(interrupt_number);
-    print_str(" received!");
+    if (interrupt_handled[interrupt_number] == 0) {
+        print_set_color(PRINT_COLOR_LIGHT_RED, PRINT_COLOR_BLACK);
+        print_str("Interrupt ");
+        print_int(interrupt_number);
+        print_str(" received!\n");
+        interrupt_handled[interrupt_number] = 1;
+    }
 }
 
 void isr0(struct interrupt_frame *frame) {
