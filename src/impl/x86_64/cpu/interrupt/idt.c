@@ -1,6 +1,7 @@
 #include "idt.h"
 #include "isr.h"
-#include "io.h" 
+#include "io.h"
+#include "vga.h"
 #include <stdint.h>
 
 #define PIC1_COMMAND 0x20
@@ -15,6 +16,8 @@
 
 struct idt_entry idt[IDT_ENTRIES];
 struct idt_ptr idtp;
+
+void (*interrupt_handlers[IDT_ENTRIES])();
 
 extern void load_segment_selectors();
 extern void idt_load(uint64_t);
@@ -63,6 +66,16 @@ void init_idt() {
     idt_set_gate(13, (uint64_t)isr13, 0x08, 0x8E);
     idt_set_gate(14, (uint64_t)isr14, 0x08, 0x8E);
     idt_set_gate(32, (uint64_t)isr32, 0x08, 0x8E); 
+    idt_set_gate(33, (uint64_t)isr33, 0x08, 0x8E); 
+    idt_set_gate(34, (uint64_t)isr34, 0x08, 0x8E); 
+    idt_set_gate(35, (uint64_t)isr35, 0x08, 0x8E); 
+    idt_set_gate(36, (uint64_t)isr36, 0x08, 0x8E); 
+    idt_set_gate(37, (uint64_t)isr37, 0x08, 0x8E); 
+    idt_set_gate(38, (uint64_t)isr38, 0x08, 0x8E); 
+    idt_set_gate(39, (uint64_t)isr39, 0x08, 0x8E); 
+    idt_set_gate(40, (uint64_t)isr40, 0x08, 0x8E); 
+    idt_set_gate(41, (uint64_t)isr41, 0x08, 0x8E); 
+    idt_set_gate(42, (uint64_t)isr42, 0x08, 0x8E); 
 
     idt_load((uint64_t)&idtp);
 
