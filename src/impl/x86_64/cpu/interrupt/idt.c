@@ -4,16 +4,6 @@
 #include "vga.h"
 #include <stdint.h>
 
-#define PIC1_COMMAND 0x20
-#define PIC1_DATA 0x21
-#define PIC2_COMMAND 0xA0
-#define PIC2_DATA 0xA1
-#define PIC_EOI 0x20
-
-#define ICW1_INIT 0x10
-#define ICW1_ICW4 0x01
-#define ICW4_8086 0x01
-
 struct idt_entry idt[IDT_ENTRIES];
 struct idt_ptr idtp;
 
@@ -76,22 +66,22 @@ void init_idt() {
         idt_set_gate(i, 0, 0, 0);
     }
 
-    idt_set_gate(0, (uint64_t)isr0, 0x08, 0x8E); 
-    idt_set_gate(1, (uint64_t)isr1, 0x08, 0x8E); 
-    idt_set_gate(8, (uint64_t)isr8, 0x08, 0x8E);  
-    idt_set_gate(13, (uint64_t)isr13, 0x08, 0x8E);
-    idt_set_gate(14, (uint64_t)isr14, 0x08, 0x8E);
-    idt_set_gate(32, (uint64_t)isr32, 0x08, 0x8E);
-    idt_set_gate(33, (uint64_t)isr33, 0x08, 0x8E);
-    idt_set_gate(34, (uint64_t)isr34, 0x08, 0x8E);
-    idt_set_gate(35, (uint64_t)isr35, 0x08, 0x8E);
-    idt_set_gate(36, (uint64_t)isr36, 0x08, 0x8E);
-    idt_set_gate(37, (uint64_t)isr37, 0x08, 0x8E);
-    idt_set_gate(38, (uint64_t)isr38, 0x08, 0x8E);
-    idt_set_gate(39, (uint64_t)isr39, 0x08, 0x8E);
-    idt_set_gate(40, (uint64_t)isr40, 0x08, 0x8E);
-    idt_set_gate(41, (uint64_t)isr41, 0x08, 0x8E);
-    idt_set_gate(42, (uint64_t)isr42, 0x08, 0x8E);
+    idt_set_gate(0, (uint64_t)isr0_stub, 0x08, 0x8E);
+    idt_set_gate(1, (uint64_t)isr1_stub, 0x08, 0x8E);
+    idt_set_gate(8, (uint64_t)isr8_stub, 0x08, 0x8E);
+    idt_set_gate(13, (uint64_t)isr13_stub, 0x08, 0x8E);
+    idt_set_gate(14, (uint64_t)isr14_stub, 0x08, 0x8E);
+    idt_set_gate(32, (uint64_t)isr32_stub, 0x08, 0x8E);
+    idt_set_gate(33, (uint64_t)isr33_stub, 0x08, 0x8E);
+    idt_set_gate(34, (uint64_t)isr34_stub, 0x08, 0x8E);
+    idt_set_gate(35, (uint64_t)isr35_stub, 0x08, 0x8E);
+    idt_set_gate(36, (uint64_t)isr36_stub, 0x08, 0x8E);
+    idt_set_gate(37, (uint64_t)isr37_stub, 0x08, 0x8E);
+    idt_set_gate(38, (uint64_t)isr38_stub, 0x08, 0x8E);
+    idt_set_gate(39, (uint64_t)isr39_stub, 0x08, 0x8E);
+    idt_set_gate(40, (uint64_t)isr40_stub, 0x08, 0x8E);
+    idt_set_gate(41, (uint64_t)isr41_stub, 0x08, 0x8E);
+    idt_set_gate(42, (uint64_t)isr42_stub, 0x08, 0x8E);
 
     pic_remap(0x20, 0x28);
 

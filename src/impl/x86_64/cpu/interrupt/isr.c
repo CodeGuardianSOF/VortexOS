@@ -1,5 +1,6 @@
 #include "isr.h"
 #include "vga.h"
+#include "io.h"
 
 #define MAX_INTERRUPTS 256
 
@@ -61,9 +62,18 @@ void handle_interrupt(int interrupt_number) {
         print_str(") received!\n");
         interrupt_handled[interrupt_number] = 1;
     }
+
+    // Send End of Interrupt (EOI) signal to the PICs
+    if (interrupt_number >= 32 && interrupt_number <= 47) {
+        // Send reset signal to slave PIC if necessary
+        if (interrupt_number >= 40) {
+            outb(0xA0, 0x20); // 0xA0 is the command port for the slave PIC
+        }
+        // Send reset signal to master PIC
+        outb(0x20, 0x20); // 0x20 is the command port for the master PIC
+    }
 }
 
-// External assembly stubs
 extern void isr0_stub();
 extern void isr1_stub();
 extern void isr8_stub();
@@ -81,7 +91,6 @@ extern void isr40_stub();
 extern void isr41_stub();
 extern void isr42_stub();
 
-// C interrupt handlers (called by the assembly stubs)
 void isr0() { handle_interrupt(0); }
 void isr1() { handle_interrupt(1); }
 void isr8() { handle_interrupt(8); }
