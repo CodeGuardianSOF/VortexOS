@@ -96,14 +96,41 @@ isr%1_stub:
     iretq
 %endmacro
 
-; Add exception handlers
-isr_stub_noerror 0
-isr_stub_noerror 1
-isr_stub_error   8
-isr_stub_error   13
-isr_stub_error   14
+; Define stubs for exceptions (interrupts 0-31)
+isr_stub_noerror 0             ; Divide by Zero
+isr_stub_noerror 1             ; Debug Exception
+isr_stub_noerror 2             ; NMI Interrupt
+isr_stub_noerror 3             ; Breakpoint
+isr_stub_noerror 4             ; Overflow
+isr_stub_noerror 5             ; Out of Bounds
+isr_stub_noerror 6             ; Invalid Opcode
+isr_stub_noerror 7             ; Device Not Available
+isr_stub_error   8             ; Double Fault
+isr_stub_noerror 9             ; Coprocessor Segment Overrun
+isr_stub_error   10            ; Invalid TSS
+isr_stub_error   11            ; Segment Not Present
+isr_stub_error   12            ; Stack Fault
+isr_stub_error   13            ; General Protection Fault
+isr_stub_error   14            ; Page Fault
+isr_stub_noerror 15            ; Reserved
+isr_stub_noerror 16            ; x87 Floating Point Exception
+isr_stub_noerror 17            ; Alignment Check
+isr_stub_noerror 18            ; Machine Check
+isr_stub_noerror 19            ; SIMD Floating Point Exception
+isr_stub_noerror 20            ; Reserved
+isr_stub_noerror 21            ; Reserved
+isr_stub_noerror 22            ; Reserved
+isr_stub_noerror 23            ; Reserved
+isr_stub_noerror 24            ; Reserved
+isr_stub_noerror 25            ; Reserved
+isr_stub_noerror 26            ; Reserved
+isr_stub_noerror 27            ; Reserved
+isr_stub_noerror 28            ; Reserved
+isr_stub_noerror 29            ; Reserved
+isr_stub_noerror 30            ; Security Exception
+isr_stub_noerror 31            ; Reserved
 
-; Add interrupt handlers
+; Define stubs for interrupt handlers (IRQ0-IRQ15)
 isr_stub_noerror 32
 isr_stub_noerror 33
 isr_stub_noerror 34
