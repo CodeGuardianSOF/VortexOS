@@ -2,6 +2,7 @@
 #define IDT_H
 
 #include <stdint.h>
+#include "isr.h"
 
 #define IDT_ENTRIES 256
 
@@ -34,7 +35,8 @@ struct idt_ptr {
     uint64_t base;
 } __attribute__((packed));
 
-void init_idt();
-void register_interrupt_handler(uint8_t n, void (*handler)());
+extern void init_idt();
+extern void (*interrupt_handlers[IDT_ENTRIES])(interrupt_frame *frame);
+extern void register_interrupt_handler(uint8_t n, void (*handler)(interrupt_frame *frame));
 
 #endif
