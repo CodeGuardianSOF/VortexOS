@@ -59,7 +59,7 @@ extern isr%1
 isr%1_stub:
     ; Push a dummy error code if a 2nd parameter has been passed to the macro
 %if %0 == 2
-    push %2                    ; Push dummy error code 0
+    push %2                    ; Push dummy error code
 %endif
     push %1                    ; Push the ISR number on stack
     save_registers
