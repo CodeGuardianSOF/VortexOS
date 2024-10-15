@@ -34,4 +34,5 @@ clean:
 
 .PHONY: run
 run:
-	qemu-system-x86_64 -cdrom dist/x86_64/kernel.iso -L /usr/share/qemu/ -machine smm=off -d int -no-shutdown -no-reboot
+	qemu-system-x86_64 -cdrom dist/x86_64/kernel.iso -L /usr/share/qemu/ -machine smm=off -d int -no-shutdown -monitor stdio 
+
