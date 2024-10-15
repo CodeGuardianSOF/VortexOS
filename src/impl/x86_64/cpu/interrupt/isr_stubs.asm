@@ -1,22 +1,5 @@
 section .text
-global isr0_stub, isr1_stub, isr8_stub, isr13_stub, isr14_stub, isr32_stub, isr33_stub, isr34_stub, isr35_stub, isr36_stub, isr37_stub, isr38_stub, isr39_stub, isr40_stub, isr41_stub, isr42_stub
-
-extern isr0
-extern isr1
-extern isr8
-extern isr13
-extern isr14
-extern isr32
-extern isr33
-extern isr34
-extern isr35
-extern isr36
-extern isr37
-extern isr38
-extern isr39
-extern isr40
-extern isr41
-extern isr42
+extern handle_interrupt
 
 %macro save_registers 0
     push rax
@@ -34,9 +17,21 @@ extern isr42
     push r13
     push r14
     push r15
+    push gs
+    push fs
+    mov  rax, es
+    push rax
+    mov  rax, ds
+    push rax
 %endmacro
 
 %macro restore_registers 0
+    pop rax
+    mov ds, rax
+    pop rax
+    mov es, rax
+    pop fs
+    pop gs
     pop r15
     pop r14
     pop r13
@@ -54,160 +49,74 @@ extern isr42
     pop rax
 %endmacro
 
-isr0_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr0
-    add rsp, 8
-    restore_registers
-    iretq
+%macro isr_stub_error 1
+global isr%1_stub
+extern isr%1
 
-isr1_stub:
+isr%1_stub:
+    push %1                    ; Push the ISR number on stack
     save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr1
-    add rsp, 8
-    restore_registers
-    iretq
 
-isr8_stub:
-    save_registers
-    mov rdi, rsp
-    cld
-    call isr8
-    restore_registers
-    iretq
+    mov eax, 0x10              ; Load data selectors with kernel data selector
+    mov ds, eax
+    mov es, eax
+    mov fs, eax
+    mov gs, eax
 
-isr13_stub:
-    save_registers
-    push 0
     mov rdi, rsp
     cld
-    call isr13
-    add rsp, 8
-    restore_registers
-    iretq
+    call handle_interrupt
 
-isr14_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr14
-    add rsp, 8
     restore_registers
+    add rsp, 16                ; Remove interrupt numbeer and error
     iretq
+%endmacro
 
-isr32_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr32
-    add rsp, 8
-    restore_registers
-    iretq
+%macro isr_stub_noerror 1
+global isr%1_stub
+extern isr%1
 
-isr33_stub:
+isr%1_stub:
+    push 0                     ; Push dummy error code 0
+    push %1                    ; Push the ISR number on stack
     save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr33
-    add rsp, 8
-    restore_registers
-    iretq
 
-isr34_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr34
-    add rsp, 8
-    restore_registers
-    iretq
+    mov eax, 0x10              ; Load data selectors with kernel data selector
+    mov ds, eax
+    mov es, eax
+    mov fs, eax
+    mov gs, eax
 
-isr35_stub:
-    save_registers
-    push 0
     mov rdi, rsp
     cld
-    call isr35
-    add rsp, 8
-    restore_registers
-    iretq
+    call handle_interrupt
 
-isr36_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr36
-    add rsp, 8
     restore_registers
+    add rsp, 16                ; Remove interrupt numbeer and error
     iretq
+%endmacro
 
-isr37_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr37
-    add rsp, 8
-    restore_registers
-    iretq
+; Add exception handlers
+isr_stub_noerror 0
+isr_stub_noerror 1
+isr_stub_error   8
+isr_stub_error   13
+isr_stub_error   14
 
-isr38_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr38
-    add rsp, 8
-    restore_registers
-    iretq
-
-isr39_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr39
-    add rsp, 8
-    restore_registers
-    iretq
-
-isr40_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr40
-    add rsp, 8
-    restore_registers
-    iretq
-
-isr41_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr41
-    add rsp, 8
-    restore_registers
-    iretq
-
-isr42_stub:
-    save_registers
-    push 0
-    mov rdi, rsp
-    cld
-    call isr42
-    add rsp, 8
-    restore_registers
-    iretq
+; Add interrupt handlers
+isr_stub_noerror 32
+isr_stub_noerror 33
+isr_stub_noerror 34
+isr_stub_noerror 35
+isr_stub_noerror 36
+isr_stub_noerror 37
+isr_stub_noerror 38
+isr_stub_noerror 39
+isr_stub_noerror 40
+isr_stub_noerror 41
+isr_stub_noerror 42
+isr_stub_noerror 43
+isr_stub_noerror 44
+isr_stub_noerror 45
+isr_stub_noerror 46
+isr_stub_noerror 47

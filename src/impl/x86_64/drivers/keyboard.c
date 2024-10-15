@@ -9,7 +9,7 @@
 
 char scan_code_to_ascii(uint8_t scan_code); // Function declaration
 
-static void keyboard_callback(struct interrupt_frame *frame) {
+static void keyboard_callback(interrupt_frame *frame) {
     uint8_t scan_code = inb(KEYBOARD_DATA_PORT);
 
     // Convert scan code to ASCII character (simplified, no shift/ctrl handling)

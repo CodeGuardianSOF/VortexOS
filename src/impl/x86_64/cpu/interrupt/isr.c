@@ -1,10 +1,9 @@
 #include "isr.h"
+#include "idt.h"
 #include "vga.h"
 #include "io.h"
 
 #define MAX_INTERRUPTS 256
-
-static uint8_t interrupt_handled[MAX_INTERRUPTS] = {0};
 
 static const char* interrupt_messages[] = {
     "Divide by Zero",                // 0
@@ -52,15 +51,19 @@ static const char* interrupt_messages[] = {
     "PCI IRQ",                       // 42 (IRQ10)
 };
 
-void handle_interrupt(int interrupt_number) {
-    if (interrupt_handled[interrupt_number] == 0) {
+void handle_interrupt(interrupt_frame *frame) {
+    uint32_t interrupt_number = frame->int_no;
+
+    /* Call the interrupt handler if one has been registered */
+    if (interrupt_handlers[interrupt_number])
+        interrupt_handlers[interrupt_number](frame);
+    else {
         print_set_color(PRINT_COLOR_LIGHT_RED, PRINT_COLOR_BLACK);
-        print_str("Interrupt ");
+        print_str("Unhandled interrupt ");
         print_int(interrupt_number);
         print_str(" (");
         print_str(interrupt_messages[interrupt_number]);
         print_str(") received!\n");
-        interrupt_handled[interrupt_number] = 1;
     }
 
     // Send End of Interrupt (EOI) signal to the PICs
@@ -73,37 +76,3 @@ void handle_interrupt(int interrupt_number) {
         outb(0x20, 0x20); // 0x20 is the command port for the master PIC
     }
 }
-
-extern void isr0_stub();
-extern void isr1_stub();
-extern void isr8_stub();
-extern void isr13_stub();
-extern void isr14_stub();
-extern void isr32_stub();
-extern void isr33_stub();
-extern void isr34_stub();
-extern void isr35_stub();
-extern void isr36_stub();
-extern void isr37_stub();
-extern void isr38_stub();
-extern void isr39_stub();
-extern void isr40_stub();
-extern void isr41_stub();
-extern void isr42_stub();
-
-void isr0() { handle_interrupt(0); }
-void isr1() { handle_interrupt(1); }
-void isr8() { handle_interrupt(8); }
-void isr13() { handle_interrupt(13); }
-void isr14() { handle_interrupt(14); }
-void isr32() { handle_interrupt(32); }
-void isr33() { handle_interrupt(33); }
-void isr34() { handle_interrupt(34); }
-void isr35() { handle_interrupt(35); }
-void isr36() { handle_interrupt(36); }
-void isr37() { handle_interrupt(37); }
-void isr38() { handle_interrupt(38); }
-void isr39() { handle_interrupt(39); }
-void isr40() { handle_interrupt(40); }
-void isr41() { handle_interrupt(41); }
-void isr42() { handle_interrupt(42); }
