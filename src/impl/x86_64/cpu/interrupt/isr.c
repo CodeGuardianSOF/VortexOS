@@ -63,7 +63,6 @@ void handle_interrupt(int interrupt_number) {
     }
 }
 
-// External assembly stubs
 extern void isr0_stub();
 extern void isr1_stub();
 extern void isr8_stub();
@@ -81,7 +80,6 @@ extern void isr40_stub();
 extern void isr41_stub();
 extern void isr42_stub();
 
-// C interrupt handlers (called by the assembly stubs)
 void isr0() { handle_interrupt(0); }
 void isr1() { handle_interrupt(1); }
 void isr8() { handle_interrupt(8); }
