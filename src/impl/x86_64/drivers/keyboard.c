@@ -2,17 +2,18 @@
 #include "isr.h"
 #include "vga.h"
 #include "idt.h"
+#include "memory.h" // Include memory manager header
 #include <stdint.h>
 
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
 #define KEYBOARD_IRQ 1
 #define SCREEN_WIDTH 80
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 1024 // Updated buffer size
 
 char scan_code_to_ascii(uint8_t scan_code); // Function declaration
 
-static char buffer[BUFFER_SIZE];
+static char* buffer = NULL; // Dynamically allocated buffer
 static size_t buffer_head = 0;
 static size_t buffer_tail = 0;
 
@@ -59,6 +60,8 @@ static void keyboard_callback(interrupt_frame *frame) {
     // Convert scan code to ASCII character (simplified, no shift/ctrl handling)
     char ascii_char = scan_code_to_ascii(scan_code);
 
+    color_reset(); // Reset text color
+
     // Handle special keys
     switch (scan_code) {
         case 0x1C: { // Enter key
@@ -99,6 +102,11 @@ static void keyboard_callback(interrupt_frame *frame) {
 }
 
 void init_keyboard() {
+    buffer = (char*)malloc(BUFFER_SIZE); // Allocate memory for the buffer
+    if (buffer == NULL) {
+        // Handle memory allocation failure
+        return;
+    }
     register_interrupt_handler(IRQ1, keyboard_callback);
 }
 
