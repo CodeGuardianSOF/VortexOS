@@ -1,6 +1,7 @@
 #include "memory.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "vga.h"
 
 #define ALIGN8(size) (((size) + 7) & ~7)
 #define HEAP_MAGIC 0xDEADBEEF
