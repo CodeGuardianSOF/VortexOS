@@ -53,17 +53,21 @@ static const char* interrupt_messages[] = {
 
 void handle_interrupt(interrupt_frame *frame) {
     uint32_t interrupt_number = frame->int_no;
+    static int unhandled_interrupt_printed = 0;
 
     /* Call the interrupt handler if one has been registered */
-    if (interrupt_handlers[interrupt_number])
+    if (interrupt_handlers[interrupt_number]) {
         interrupt_handlers[interrupt_number](frame);
-    else {
-        print_set_color(PRINT_COLOR_LIGHT_RED, PRINT_COLOR_BLACK);
-        print_str("Unhandled interrupt ");
-        print_int(interrupt_number);
-        print_str(" (");
-        print_str(interrupt_messages[interrupt_number]);
-        print_str(") received!\n");
+    } else {
+        if (!unhandled_interrupt_printed) {
+            print_set_color(PRINT_COLOR_LIGHT_RED, PRINT_COLOR_BLACK);
+            print_str("Unhandled interrupt ");
+            print_int(interrupt_number);
+            print_str(" (");
+            print_str(interrupt_messages[interrupt_number]);
+            print_str(") received!\n");
+            unhandled_interrupt_printed = 1;
+        }
     }
 
     // Send End of Interrupt (EOI) signal to the PICs
