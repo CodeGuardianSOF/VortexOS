@@ -1,7 +1,9 @@
 #include "memory.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include "vga.h"
+#include "memcpy.h"
 
 #define ALIGN8(size) (((size) + 7) & ~7)
 #define HEAP_MAGIC 0xDEADBEEF
@@ -36,7 +38,7 @@ static size_t get_free_list_index(size_t size) {
 
 static void simple_mutex_lock(simple_mutex_t* mutex) {
     while (__sync_lock_test_and_set(&mutex->lock, 1)) {
-        // Busy-wait
+        // Busy-wait loop
     }
 }
 
@@ -60,7 +62,8 @@ void memory_init(void* heap_start, size_t heap_size) {
     simple_mutex_unlock(&memory_mutex);
 }
 
-void* malloc(size_t size) {
+void* kmalloc(size_t size) {
+    
     simple_mutex_lock(&memory_mutex);
 
     size_t aligned_size = ALIGN8(size);
@@ -112,9 +115,10 @@ void* malloc(size_t size) {
 
     simple_mutex_unlock(&memory_mutex);
     return NULL; // No suitable block found
+    
 }
 
-void free(void* ptr) {
+void kfree(void* ptr) {
     if (!ptr) {
         return;
     }
@@ -161,6 +165,34 @@ void free(void* ptr) {
     free_lists[index] = block;
 
     simple_mutex_unlock(&memory_mutex);
+}
+
+void* realloc(void* ptr, size_t size) {
+    if (!ptr) {
+        return kmalloc(size);
+    }
+
+    if (size == 0) {
+        kfree(ptr);
+        return NULL;
+    }
+
+    block_t* block = (block_t*)((char*)ptr - sizeof(block_t));
+    if (block->magic != HEAP_MAGIC) {
+        return NULL; // Invalid block
+    }
+
+    if (block->size >= size) {
+        return ptr; // Current block is already large enough
+    }
+
+    void* new_ptr = kmalloc(size);
+    if (new_ptr) {
+        memcpy(new_ptr, ptr, block->size);
+        kfree(ptr);
+    }
+
+    return new_ptr;
 }
 
 void defragment_memory() {

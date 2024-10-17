@@ -1,5 +1,18 @@
 {
     "files.associations": {
-        "memory.h": "c"
+        "memory.h": "c",
+        "vga.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "format": "c",
+        "initializer_list": "c",
+        "span": "c",
+        "stdio.h": "c",
+        "stddef.h": "c",
+        "memcpy.h": "c",
+        "io.h": "c",
+        "scheduler.h": "c",
+        "stdint.h": "c",
+        "isr.h": "c"
     }
 }

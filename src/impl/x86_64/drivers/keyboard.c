@@ -2,7 +2,7 @@
 #include "isr.h"
 #include "vga.h"
 #include "idt.h"
-#include "memory.h" // Include memory manager header for malloc and free
+#include "memory.h"
 #include <stdint.h>
 
 #define KEYBOARD_DATA_PORT 0x60
@@ -12,11 +12,13 @@
 #define SCREEN_HEIGHT 25
 #define BUFFER_SIZE 1024 // Updated buffer size
 
-char scan_code_to_ascii(uint8_t scan_code); // Function declaration
+char scan_code_to_ascii(uint8_t scan_code, int shift, int caps_lock); // Function declaration
 
 static char* buffer = NULL; // Dynamically allocated buffer
 static size_t buffer_head = 0;
 static size_t buffer_tail = 0;
+static int shift_pressed = 0; // Shift state
+static int caps_lock_on = 0; // Caps Lock state
 
 // Function to get the current cursor position
 uint16_t get_cursor_position() {
@@ -58,11 +60,6 @@ void print_char_at(char c, uint16_t pos) {
 static void keyboard_callback(interrupt_frame *frame) {
     uint8_t scan_code = inb(KEYBOARD_DATA_PORT);
 
-    // Convert scan code to ASCII character (simplified, no shift/ctrl handling)
-    char ascii_char = scan_code_to_ascii(scan_code);
-
-    color_reset(); // Reset text color
-
     // Handle special keys
     switch (scan_code) {
         case 0x1C: { // Enter key
@@ -85,8 +82,20 @@ static void keyboard_callback(interrupt_frame *frame) {
             }
             break;
         }
+        case 0x2A: // Left Shift pressed
+        case 0x36: // Right Shift pressed
+            shift_pressed = 1;
+            break;
+        case 0xAA: // Left Shift released
+        case 0xB6: // Right Shift released
+            shift_pressed = 0;
+            break;
+        case 0x3A: // Caps Lock pressed
+            caps_lock_on = !caps_lock_on;
+            break;
         default:
-            // Print the character to the screen
+            // Convert scan code to ASCII character (considering shift and caps lock)
+            char ascii_char = scan_code_to_ascii(scan_code, shift_pressed, caps_lock_on);
             if (ascii_char != 0) {
                 uint16_t pos = get_cursor_position();
                 if (pos < SCREEN_WIDTH * SCREEN_HEIGHT) { // Ensure cursor does not exceed screen size
@@ -110,7 +119,7 @@ static void keyboard_callback(interrupt_frame *frame) {
 }
 
 void init_keyboard() {
-    buffer = (char*)malloc(BUFFER_SIZE); // Allocate memory for the buffer using malloc
+    buffer = (char*)kmalloc(BUFFER_SIZE); // Allocate memory for the buffer using malloc
     if (buffer == NULL) {
         // Handle memory allocation failure
         return;
@@ -120,12 +129,12 @@ void init_keyboard() {
 
 void cleanup_keyboard() {
     if (buffer != NULL) {
-        free(buffer); // Free the allocated buffer using free
+        kfree(buffer); // Free the allocated buffer using free
         buffer = NULL;
     }
 }
 
-char scan_code_to_ascii(uint8_t scan_code) {
+char scan_code_to_ascii(uint8_t scan_code, int shift, int caps_lock) {
     static char ascii_table[] = {
         0, 27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
         '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',
@@ -134,11 +143,27 @@ char scan_code_to_ascii(uint8_t scan_code) {
         '*', 0, ' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     };
 
+    static char shift_ascii_table[] = {
+        0, 27, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',
+        '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',
+        0, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', 0,
+        '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0,
+        '*', 0, ' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    };
+
     if (scan_code > 58) {
         return 0;
     }
 
-    return ascii_table[scan_code];
+    char ascii_char = shift ? shift_ascii_table[scan_code] : ascii_table[scan_code];
+
+    if (caps_lock && ascii_char >= 'a' && ascii_char <= 'z') {
+        ascii_char -= 32; // Convert to uppercase
+    } else if (caps_lock && ascii_char >= 'A' && ascii_char <= 'Z') {
+        ascii_char += 32; // Convert to lowercase
+    }
+
+    return ascii_char;
 }
 
 // Function to read a character from the buffer
