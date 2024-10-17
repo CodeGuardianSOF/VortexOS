@@ -6,14 +6,11 @@
 #include "delay.h"
 #include "utils.h"
 #include "scheduler.h" // Include the scheduler header
+#include "mouse.h" // Include the mouse header
 
 #define HEAP_SIZE 6 * 1024 * 1024 // 6 MiB
 
 static char heap[HEAP_SIZE]; // Define the heap
-
-void print_hello() {
-    print_str("hello\n");
-}
 
 void kernel_main() {
     print_clear();
@@ -28,6 +25,8 @@ void kernel_main() {
     init_timer(100);
 
     init_keyboard();
+
+    init_mouse(); // Initialize mouse driver
 
     while (1) {
         scheduler_update();

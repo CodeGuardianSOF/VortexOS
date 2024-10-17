@@ -169,15 +169,16 @@ void defragment_memory() {
     for (size_t i = 0; i < NUM_FREE_LISTS; i++) {
         block_t* current = free_lists[i];
         while (current) {
-            if (current->free && current->next && current->next->free) {
-                current->size += current->next->size + sizeof(block_t);
-                current->next = current->next->next;
-                if (current->next) {
-                    current->next->prev = current;
+            block_t* next = current->next;
+            while (next && next->free) {
+                current->size += next->size + sizeof(block_t);
+                current->next = next->next;
+                if (next->next) {
+                    next->next->prev = current;
                 }
-            } else {
-                current = current->next;
+                next = current->next;
             }
+            current = current->next;
         }
     }
 

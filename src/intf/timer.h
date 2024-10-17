@@ -12,4 +12,6 @@ void set_timer_frequency(uint32_t frequency); // Function to set timer frequency
 void reset_timer(); // Function to reset the timer
 uint32_t get_tick_count(); // Function to get the current tick count
 
+extern uint32_t frequency; // Declare frequency as extern
+
 #endif // TIMER_H

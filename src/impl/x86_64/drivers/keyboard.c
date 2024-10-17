@@ -2,13 +2,14 @@
 #include "isr.h"
 #include "vga.h"
 #include "idt.h"
-#include "memory.h" // Include memory manager header
+#include "memory.h" // Include memory manager header for malloc and free
 #include <stdint.h>
 
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
 #define KEYBOARD_IRQ 1
 #define SCREEN_WIDTH 80
+#define SCREEN_HEIGHT 25
 #define BUFFER_SIZE 1024 // Updated buffer size
 
 char scan_code_to_ascii(uint8_t scan_code); // Function declaration
@@ -72,10 +73,15 @@ static void keyboard_callback(interrupt_frame *frame) {
         }
         case 0x0E: { // Backspace key
             uint16_t pos = get_cursor_position();
-            if (pos > 0 && (pos % SCREEN_WIDTH) != 0) { // Ensure cursor stays within the current row
-                set_cursor_position(pos - 1);
-                print_char_at(' ', pos - 1); // Overwrite the character with a space
-                set_cursor_position(pos - 1); // Move cursor back again
+            if (pos > 0) { // Ensure cursor is not at the start of the screen
+                if ((pos % SCREEN_WIDTH) != 0) { // Ensure cursor stays within the current row
+                    set_cursor_position(pos - 1);
+                    print_char_at(' ', pos - 1); // Overwrite the character with a space
+                    set_cursor_position(pos - 1); // Move cursor back again
+                } else { // Handle case where cursor is at the start of a line
+                    set_cursor_position(pos - 1);
+                    print_char_at(' ', pos - 1); // Overwrite the character with a space
+                }
             }
             break;
         }
@@ -83,15 +89,17 @@ static void keyboard_callback(interrupt_frame *frame) {
             // Print the character to the screen
             if (ascii_char != 0) {
                 uint16_t pos = get_cursor_position();
-                print_char_at(ascii_char, pos);
-                set_cursor_position(pos + 1); // Move cursor to the right
+                if (pos < SCREEN_WIDTH * SCREEN_HEIGHT) { // Ensure cursor does not exceed screen size
+                    print_char_at(ascii_char, pos);
+                    set_cursor_position(pos + 1); // Move cursor to the right
 
-                // Add character to buffer
-                buffer[buffer_head] = ascii_char;
-                buffer_head = (buffer_head + 1) % BUFFER_SIZE;
-                // Handle buffer overflow
-                if (buffer_head == buffer_tail) {
-                    buffer_tail = (buffer_tail + 1) % BUFFER_SIZE;
+                    // Add character to buffer
+                    buffer[buffer_head] = ascii_char;
+                    buffer_head = (buffer_head + 1) % BUFFER_SIZE;
+                    // Handle buffer overflow
+                    if (buffer_head == buffer_tail) {
+                        buffer_tail = (buffer_tail + 1) % BUFFER_SIZE;
+                    }
                 }
             }
             break;
@@ -102,12 +110,19 @@ static void keyboard_callback(interrupt_frame *frame) {
 }
 
 void init_keyboard() {
-    buffer = (char*)malloc(BUFFER_SIZE); // Allocate memory for the buffer
+    buffer = (char*)malloc(BUFFER_SIZE); // Allocate memory for the buffer using malloc
     if (buffer == NULL) {
         // Handle memory allocation failure
         return;
     }
     register_interrupt_handler(IRQ1, keyboard_callback);
+}
+
+void cleanup_keyboard() {
+    if (buffer != NULL) {
+        free(buffer); // Free the allocated buffer using free
+        buffer = NULL;
+    }
 }
 
 char scan_code_to_ascii(uint8_t scan_code) {

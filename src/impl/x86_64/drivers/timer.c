@@ -5,8 +5,8 @@
 
 #define IRQ0 32
 
+uint32_t frequency = 0; // Define frequency here
 static uint32_t tick = 0;
-static uint32_t frequency = 0;
 static uint8_t timer_running = 0;
 
 static void timer_callback(interrupt_frame *regs) {

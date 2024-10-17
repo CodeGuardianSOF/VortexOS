@@ -50,6 +50,19 @@ void print_newline() {
     clear_row(NUM_COLS - 1);
 }
 
+void print_hex(uint32_t number) {
+    char hex_chars[] = "0123456789ABCDEF";
+    char buffer[9];
+    buffer[8] = '\0';
+
+    for (int i = 7; i >= 0; i--) {
+        buffer[i] = hex_chars[number & 0xF];
+        number >>= 4;
+    }
+
+    print_str(buffer);
+}
+
 void print_char(char character) {
     if (character == '\n') {
         print_newline();
