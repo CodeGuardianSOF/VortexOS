@@ -1,218 +1,278 @@
 #include "memory.h"
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
-#include <stdarg.h>
+#include "snprintf.h"
 #include "vga.h"
-#include "memcpy.h"
 
-#define ALIGN8(size) (((size) + 7) & ~7)
-#define HEAP_MAGIC 0xDEADBEEF
-#define NUM_FREE_LISTS 10
-#define POOL_SIZE 1024
+extern char __memory_pool_start;
+extern char __memory_pool_end;
 
-typedef struct block {
+#define ALIGNMENT 8
+#define ALIGN_MASK (ALIGNMENT - 1)
+
+#define ERR_NO_MEMORY 1
+#define KMALLOC_FLAG_RESERVED 0x1
+
+typedef struct MemoryBlock {
     size_t size;
-    struct block* next;
-    struct block* prev;
-    int free;
-    unsigned int magic;
-} block_t;
+    bool is_free;
+    struct MemoryBlock* next;
+    struct MemoryBlock* prev;
+} MemoryBlock;
 
-typedef struct {
-    volatile int lock;
-} simple_mutex_t;
+static char* memory_pool_start;
+static size_t memory_pool_size;
+static MemoryBlock* free_list = NULL;
+static MemoryBlock* allocated_list = NULL;
+static MemoryBlock* reserved_free_list = NULL;
+static MemoryBlock* reserved_allocated_list = NULL;
 
-static block_t* free_lists[NUM_FREE_LISTS] = {NULL};
-static block_t* memory_pools[NUM_FREE_LISTS] = {NULL};
-static simple_mutex_t memory_mutex = {0};
+static int last_error;
 
-static size_t get_free_list_index(size_t size) {
-    size_t index = 0;
-    size >>= 3;
-    while (size > 1 && index < NUM_FREE_LISTS - 1) {
-        size >>= 1;
-        index++;
-    }
-    return index;
+static size_t align_size(size_t size) {
+    return (size + ALIGN_MASK) & ~ALIGN_MASK;
 }
 
-static void simple_mutex_lock(simple_mutex_t* mutex) {
-    while (__sync_lock_test_and_set(&mutex->lock, 1)) {
-        // Busy-wait loop
-    }
+void initialize_memory_manager() {
+    memory_pool_start = &__memory_pool_start;
+    memory_pool_size = (uintptr_t)&__memory_pool_end - (uintptr_t)&__memory_pool_start;
+
+    uintptr_t reserved_size = memory_pool_size / 4;
+    uintptr_t general_size = memory_pool_size - reserved_size;
+
+    // Initialize general pool
+    free_list = (MemoryBlock*)memory_pool_start;
+    free_list->size = general_size - sizeof(MemoryBlock);
+    free_list->is_free = true;
+    free_list->next = NULL;
+    free_list->prev = NULL;
+
+    // Initialize reserved pool
+    reserved_free_list = (MemoryBlock*)(memory_pool_start + general_size);
+    reserved_free_list->size = reserved_size - sizeof(MemoryBlock);
+    reserved_free_list->is_free = true;
+    reserved_free_list->next = NULL;
+    reserved_free_list->prev = NULL;
 }
 
-static void simple_mutex_unlock(simple_mutex_t* mutex) {
-    __sync_lock_release(&mutex->lock);
-}
 
-void memory_init(void* heap_start, size_t heap_size) {
-    simple_mutex_lock(&memory_mutex);
-
-    block_t* initial_block = (block_t*)heap_start;
-    initial_block->size = heap_size - sizeof(block_t);
-    initial_block->next = NULL;
-    initial_block->prev = NULL;
-    initial_block->free = 1;
-    initial_block->magic = HEAP_MAGIC;
-
-    size_t index = get_free_list_index(initial_block->size);
-    free_lists[index] = initial_block;
-
-    simple_mutex_unlock(&memory_mutex);
-}
-
-void* kmalloc(size_t size) {
-    
-    simple_mutex_lock(&memory_mutex);
-
-    size_t aligned_size = ALIGN8(size);
-    size_t index = get_free_list_index(aligned_size);
-
-    for (; index < NUM_FREE_LISTS; index++) {
-        block_t* current = free_lists[index];
-        while (current && !(current->free && current->size >= aligned_size)) {
-            current = current->next;
+static void split_block(MemoryBlock* block, size_t size) {
+    if (block->size >= size + sizeof(MemoryBlock) + ALIGNMENT) {
+        MemoryBlock* new_block = (MemoryBlock*)((char*)block + sizeof(MemoryBlock) + size);
+        new_block->size = block->size - size - sizeof(MemoryBlock);
+        new_block->is_free = true;
+        new_block->next = block->next;
+        new_block->prev = block;
+        if (block->next) {
+            block->next->prev = new_block;
         }
-
-        if (current) {
-            if (current->size > aligned_size + sizeof(block_t)) {
-                block_t* new_block = (block_t*)((char*)current + sizeof(block_t) + aligned_size);
-                new_block->size = current->size - aligned_size - sizeof(block_t);
-                new_block->next = current->next;
-                new_block->prev = current;
-                new_block->free = 1;
-                new_block->magic = HEAP_MAGIC;
-
-                current->size = aligned_size;
-                current->next = new_block;
-                if (new_block->next) {
-                    new_block->next->prev = new_block;
-                }
-
-                size_t new_index = get_free_list_index(new_block->size);
-                new_block->next = free_lists[new_index];
-                if (free_lists[new_index]) {
-                    free_lists[new_index]->prev = new_block;
-                }
-                free_lists[new_index] = new_block;
-            }
-
-            current->free = 0;
-            if (current->prev) {
-                current->prev->next = current->next;
-            } else {
-                free_lists[index] = current->next;
-            }
-            if (current->next) {
-                current->next->prev = current->prev;
-            }
-
-            simple_mutex_unlock(&memory_mutex);
-            return (void*)((char*)current + sizeof(block_t));
-        }
+        block->next = new_block;
+        block->size = size;
     }
-
-    simple_mutex_unlock(&memory_mutex);
-    return NULL; // No suitable block found
-    
 }
 
-void kfree(void* ptr) {
-    if (!ptr) {
-        return;
-    }
-
-    simple_mutex_lock(&memory_mutex);
-
-    block_t* block = (block_t*)((char*)ptr - sizeof(block_t));
-    if (block->magic != HEAP_MAGIC) {
-        simple_mutex_unlock(&memory_mutex);
-        return; // Invalid block
-    }
-
-    block->free = 1;
-
-    // Coalesce with next block if possible
-    if (block->next && block->next->free) {
-        block->size += block->next->size + sizeof(block_t);
+static void coalesce_blocks(MemoryBlock* block) {
+    if (block->next && block->next->is_free) {
+        block->size += sizeof(MemoryBlock) + block->next->size;
         block->next = block->next->next;
         if (block->next) {
             block->next->prev = block;
         }
     }
-
-    // Coalesce with previous block if possible
-    if (block->prev && block->prev->free) {
-        block->prev->size += block->size + sizeof(block_t);
+    if (block->prev && block->prev->is_free) {
+        block->prev->size += sizeof(MemoryBlock) + block->size;
         block->prev->next = block->next;
         if (block->next) {
             block->next->prev = block->prev;
         }
-        block = block->prev;
     }
-
-    size_t index = get_free_list_index(block->size);
-
-    // Insert the block into the appropriate free list
-    block->next = free_lists[index];
-    block->prev = NULL;
-
-    if (free_lists[index]) {
-        free_lists[index]->prev = block;
-    }
-
-    free_lists[index] = block;
-
-    simple_mutex_unlock(&memory_mutex);
-}
-
-void* realloc(void* ptr, size_t size) {
-    if (!ptr) {
-        return kmalloc(size);
-    }
-
-    if (size == 0) {
-        kfree(ptr);
-        return NULL;
-    }
-
-    block_t* block = (block_t*)((char*)ptr - sizeof(block_t));
-    if (block->magic != HEAP_MAGIC) {
-        return NULL; // Invalid block
-    }
-
-    if (block->size >= size) {
-        return ptr; // Current block is already large enough
-    }
-
-    void* new_ptr = kmalloc(size);
-    if (new_ptr) {
-        memcpy(new_ptr, ptr, block->size);
-        kfree(ptr);
-    }
-
-    return new_ptr;
 }
 
 void defragment_memory() {
-    simple_mutex_lock(&memory_mutex);
-
-    for (size_t i = 0; i < NUM_FREE_LISTS; i++) {
-        block_t* current = free_lists[i];
-        while (current) {
-            block_t* next = current->next;
-            while (next && next->free) {
-                current->size += next->size + sizeof(block_t);
-                current->next = next->next;
-                if (next->next) {
-                    next->next->prev = current;
-                }
-                next = current->next;
-            }
+    MemoryBlock* current = free_list;
+    while (current && current->next) {
+        if (current->is_free && current->next->is_free) {
+            coalesce_blocks(current);
+        } else {
             current = current->next;
         }
     }
 
-    simple_mutex_unlock(&memory_mutex);
+    current = reserved_free_list;
+    while (current && current->next) {
+        if (current->is_free && current->next->is_free) {
+            coalesce_blocks(current);
+        } else {
+            current = current->next;
+        }
+    }
+}
+
+void* kmalloc(size_t size, int flags) {
+    size = align_size(size);
+    MemoryBlock* current = (flags & KMALLOC_FLAG_RESERVED) ? reserved_free_list : free_list;
+
+    // Debugging output
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer), "Requesting %zu bytes from kmalloc\n", size);
+    print_str(buffer);
+
+    while (current) {
+        if (current->is_free && current->size >= size) {
+            split_block(current, size);
+            current->is_free = false;
+
+            // Remove from free list
+            if (current->prev) {
+                current->prev->next = current->next;
+            } else {
+                if (flags & KMALLOC_FLAG_RESERVED) {
+                    reserved_free_list = current->next;
+                } else {
+                    free_list = current->next;
+                }
+            }
+            if (current->next) {
+                current->next->prev = current->prev;
+            }
+
+            // Add to allocated list
+            current->next = (flags & KMALLOC_FLAG_RESERVED) ? reserved_allocated_list : allocated_list;
+            if (flags & KMALLOC_FLAG_RESERVED) {
+                if (reserved_allocated_list) {
+                    reserved_allocated_list->prev = current;
+                }
+                reserved_allocated_list = current;
+            } else {
+                if (allocated_list) {
+                    allocated_list->prev = current;
+                }
+                allocated_list = current;
+            }
+
+            // Debugging output
+            snprintf(buffer, sizeof(buffer), "Allocated %zu bytes at %p\n", size, (void*)((char*)current + sizeof(MemoryBlock)));
+            print_str(buffer);
+
+            return (void*)((char*)current + sizeof(MemoryBlock));
+        }
+        current = current->next;
+    }
+
+    last_error = ERR_NO_MEMORY;
+    print_str("kmalloc failed: Out of memory\n");
+    return NULL;
+}
+
+void kfree(void* ptr) {
+    if (!ptr) return;
+    MemoryBlock* block = (MemoryBlock*)((char*)ptr - sizeof(MemoryBlock));
+    block->is_free = true;
+
+    // Remove from allocated list
+    if (block->prev) {
+        block->prev->next = block->next;
+    } else {
+        if (block >= (MemoryBlock*)memory_pool_start && block < (MemoryBlock*)(memory_pool_start + memory_pool_size / 4 * 3)) {
+            allocated_list = block->next;
+        } else {
+            reserved_allocated_list = block->next;
+        }
+    }
+    if (block->next) {
+        block->next->prev = block->prev;
+    }
+
+    coalesce_blocks(block);
+}
+
+const char* get_error_message(int error_code) {
+    switch (error_code) {
+        case ERR_NO_MEMORY:
+            return "Out of memory";
+        default:
+            return "Unknown error";
+    }
+}
+
+void check_memory_leaks() {
+    if (allocated_list || reserved_allocated_list) {
+        print_str("Memory Leak Warning: The following blocks were not freed:\n");
+        MemoryBlock* current = allocated_list;
+        while (current) {
+            char buffer[256];
+            snprintf(buffer, sizeof(buffer), "Leaked Block: Size = %zu bytes\n", current->size);
+            print_str(buffer);
+            current = current->next;
+        }
+        current = reserved_allocated_list;
+        while (current) {
+            char buffer[256];
+            snprintf(buffer, sizeof(buffer), "Leaked Block: Size = %zu bytes\n", current->size);
+            print_str(buffer);
+            current = current->next;
+        }
+    } else {
+        print_str("No memory leaks detected.\n");
+    }
+}
+
+void print_memory_stats() {
+    size_t total_memory = memory_pool_size;
+    size_t used_memory = 0;
+    size_t free_memory = 0;
+    size_t reserved_free_memory = 0;
+
+    MemoryBlock* current = free_list;
+    while (current) {
+        if (current->is_free) {
+            free_memory += current->size + sizeof(MemoryBlock);
+        }
+        current = current->next;
+    }
+
+    current = allocated_list;
+    while (current) {
+        if (!current->is_free) {
+            used_memory += current->size + sizeof(MemoryBlock);
+        }
+        current = current->next;
+    }
+
+    current = reserved_free_list;
+    while (current) {
+        if (current->is_free) {
+            reserved_free_memory += current->size + sizeof(MemoryBlock);
+        }
+        current = current->next;
+    }
+
+    current = reserved_allocated_list;
+    while (current) {
+        if (!current->is_free) {
+            used_memory += current->size + sizeof(MemoryBlock);
+        }
+        current = current->next;
+    }
+
+    char buffer[256];
+    snprintf(buffer, sizeof(buffer), "Total Memory: %zu bytes\n", total_memory);
+    print_str(buffer);
+    snprintf(buffer, sizeof(buffer), "Used Memory: %zu bytes\n", used_memory);
+    print_str(buffer);
+    snprintf(buffer, sizeof(buffer), "Free Memory: %zu bytes\n", free_memory);
+    print_str(buffer);
+    snprintf(buffer, sizeof(buffer), "Reserved Free Memory: %zu bytes\n", reserved_free_memory);
+    print_str(buffer);
+}
+
+__attribute__((constructor))
+static void setup_memory() {
+    initialize_memory_manager();
+}
+
+__attribute__((destructor))
+static void cleanup_memory() {
+    check_memory_leaks();
 }

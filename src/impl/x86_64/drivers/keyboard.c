@@ -3,22 +3,33 @@
 #include "vga.h"
 #include "idt.h"
 #include "memory.h"
+#include "cli.h"
+#include "delay.h"
+#include "keyboard.h"
 #include <stdint.h>
+#include <stddef.h>
 
+#define  CLI_PROMPT_LENGTH 5
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
 #define KEYBOARD_IRQ 1
 #define SCREEN_WIDTH 80
 #define SCREEN_HEIGHT 25
-#define BUFFER_SIZE 1024 // Updated buffer size
 
 char scan_code_to_ascii(uint8_t scan_code, int shift, int caps_lock); // Function declaration
 
-static char* buffer = NULL; // Dynamically allocated buffer
-static size_t buffer_head = 0;
-static size_t buffer_tail = 0;
 static int shift_pressed = 0; // Shift state
 static int caps_lock_on = 0; // Caps Lock state
+char *keyboard_buffer = NULL; // Define keyboard buffer
+
+size_t buffer_head = 0; // Buffer head
+size_t buffer_tail = 0; // Buffer tail
+
+#define BUFFER_SIZE 1024 // Define the buffer size
+
+extern char *buffer; // Declare buffer pointer
+extern size_t buffer_head; // Declare buffer head
+extern size_t buffer_tail; // Declare buffer tail
 
 // Function to get the current cursor position
 uint16_t get_cursor_position() {
@@ -42,10 +53,8 @@ void set_cursor_position(uint16_t pos) {
 void print_char_at(char c, uint16_t pos) {
     extern size_t col;
     extern size_t row;
-
     size_t old_col = col;
     size_t old_row = row;
-
     col = pos % SCREEN_WIDTH;
     row = pos / SCREEN_WIDTH;
 
@@ -60,24 +69,36 @@ void print_char_at(char c, uint16_t pos) {
 static void keyboard_callback(interrupt_frame *frame) {
     uint8_t scan_code = inb(KEYBOARD_DATA_PORT);
 
+    color_reset(); // Reset text color
+
     // Handle special keys
     switch (scan_code) {
         case 0x1C: { // Enter key
-            uint16_t pos = get_cursor_position();
-            uint16_t new_pos = (pos / SCREEN_WIDTH + 1) * SCREEN_WIDTH;
-            set_cursor_position(new_pos);
+            // Copy buffer content to command_buffer
+            size_t i = 0;
+            while (buffer_tail != buffer_head && i < MAX_COMMAND_LENGTH - 1) {
+                command_buffer[i++] = keyboard_buffer[buffer_tail];
+                buffer_tail = (buffer_tail + 1) % BUFFER_SIZE;
+            }
+            command_buffer[i] = '\0'; // Null-terminate the command
+
+            // Pass the command to CLI for handling
+            handle_command(command_buffer);
+
+            // Clear the buffer and reset the cursor position
+            buffer_head = buffer_tail = 0;
             break;
         }
         case 0x0E: { // Backspace key
             uint16_t pos = get_cursor_position();
-            if (pos > 0) { // Ensure cursor is not at the start of the screen
+            if (pos > CLI_PROMPT_LENGTH) { // Ensure cursor is not at the barrier
                 if ((pos % SCREEN_WIDTH) != 0) { // Ensure cursor stays within the current row
                     set_cursor_position(pos - 1);
                     print_char_at(' ', pos - 1); // Overwrite the character with a space
                     set_cursor_position(pos - 1); // Move cursor back again
                 } else { // Handle case where cursor is at the start of a line
-                    set_cursor_position(pos - 1);
-                    print_char_at(' ', pos - 1); // Overwrite the character with a space
+                    // Barrier logic: Prevent moving back to the previous row
+                    // Optionally, you can add a beep sound or some visual indication
                 }
             }
             break;
@@ -103,7 +124,7 @@ static void keyboard_callback(interrupt_frame *frame) {
                     set_cursor_position(pos + 1); // Move cursor to the right
 
                     // Add character to buffer
-                    buffer[buffer_head] = ascii_char;
+                    keyboard_buffer[buffer_head] = ascii_char;
                     buffer_head = (buffer_head + 1) % BUFFER_SIZE;
                     // Handle buffer overflow
                     if (buffer_head == buffer_tail) {
@@ -119,18 +140,17 @@ static void keyboard_callback(interrupt_frame *frame) {
 }
 
 void init_keyboard() {
-    buffer = (char*)kmalloc(BUFFER_SIZE); // Allocate memory for the buffer using malloc
-    if (buffer == NULL) {
-        // Handle memory allocation failure
-        return;
-    }
+    keyboard_buffer = (char *)kmalloc(BUFFER_SIZE, 0); // Allocate memory for the buffer
+    buffer_head = buffer_tail = 0;
+
+    // Set the cursor position to the barrier
     register_interrupt_handler(IRQ1, keyboard_callback);
 }
 
 void cleanup_keyboard() {
-    if (buffer != NULL) {
-        kfree(buffer); // Free the allocated buffer using free
-        buffer = NULL;
+    if (keyboard_buffer) {
+        kfree(keyboard_buffer); // Free the allocated buffer
+        keyboard_buffer = NULL;
     }
 }
 
@@ -166,12 +186,11 @@ char scan_code_to_ascii(uint8_t scan_code, int shift, int caps_lock) {
     return ascii_char;
 }
 
-// Function to read a character from the buffer
 char read_char() {
     if (buffer_head == buffer_tail) {
         return 0; // Buffer is empty
     }
-    char c = buffer[buffer_tail];
+    char c = keyboard_buffer[buffer_tail];
     buffer_tail = (buffer_tail + 1) % BUFFER_SIZE;
     return c;
 }

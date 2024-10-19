@@ -1,7 +1,7 @@
 #include "scheduler.h"
 #include "timer.h"
 
-#define MAX_TASKS 10
+#define MAX_TASKS 50
 
 typedef struct {
     task_func_t func;
@@ -21,7 +21,7 @@ void add_task(task_func_t func, uint32_t interval) {
     }
 }
 
-void scheduler_update() {
+void task_scheduler() {
     uint32_t current_time = get_tick_count();
     for (uint32_t i = 0; i < task_count; i++) {
         if (current_time - tasks[i].last_execution >= tasks[i].interval) {

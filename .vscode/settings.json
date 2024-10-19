@@ -13,6 +13,12 @@
         "io.h": "c",
         "scheduler.h": "c",
         "stdint.h": "c",
-        "isr.h": "c"
+        "isr.h": "c",
+        "snprintf.h": "c",
+        "keyboard.h": "c",
+        "utils.h": "c",
+        "delay.h": "c",
+        "manager.h": "c",
+        "cli.h": "c"
     }
 }

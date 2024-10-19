@@ -6,6 +6,6 @@
 typedef void (*task_func_t)();
 
 void add_task(task_func_t func, uint32_t interval);
-void scheduler_update();
+void task_scheduler();
 
 #endif 
